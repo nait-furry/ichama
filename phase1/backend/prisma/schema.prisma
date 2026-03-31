@@ -1,0 +1,153 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  TREASURER
+  MEMBER
+}
+
+enum ContributionStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+}
+
+enum InvoiceStatus {
+  REGISTERED
+  FINANCED
+  PAID
+  CANCELLED
+}
+
+enum LoanStatus {
+  DRAFT
+  DISBURSED
+  REPAID
+  DEFAULTED
+}
+
+enum TransactionType {
+  CONTRIBUTION
+  LOAN_DISBURSEMENT
+  LOAN_REPAYMENT
+}
+
+model User {
+  id           String              @id @default(uuid())
+  email        String              @unique
+  phone        String              @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime            @default(now())
+  memberships  GroupMembership[]
+  contributions Contribution[]
+  auditLogs    AuditLog[]
+  transactions Transaction[]
+  loanRepayments LoanRepayment[]
+}
+
+model Group {
+  id           String              @id @default(uuid())
+  name         String
+  description  String?
+  legalStatus  String?
+  createdAt    DateTime            @default(now())
+  memberships  GroupMembership[]
+  contributions Contribution[]
+  invoices     Invoice[]
+  loans        Loan[]
+  transactions Transaction[]
+}
+
+model GroupMembership {
+  id        String   @id @default(uuid())
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId   String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  role      Role
+  joinedAt  DateTime @default(now())
+  active    Boolean  @default(true)
+}
+
+model Contribution {
+  id                String             @id @default(uuid())
+  group             Group              @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId           String
+  user              User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId            String?
+  amount            Decimal
+  channel           String
+  externalReference String?
+  status            ContributionStatus @default(PENDING)
+  recordedAt        DateTime           @default(now())
+  transaction       Transaction?       @relation(fields: [transactionId], references: [id])
+  transactionId     String?
+}
+
+model Invoice {
+  id          String       @id @default(uuid())
+  group       Group        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId     String
+  supplier    String
+  customer    String
+  amount      Decimal
+  dueDate     DateTime
+  status      InvoiceStatus @default(REGISTERED)
+  createdAt   DateTime     @default(now())
+}
+
+model Loan {
+  id           String       @id @default(uuid())
+  group        Group        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId      String
+  amount       Decimal
+  collateral   Json?
+  status       LoanStatus   @default(DRAFT)
+  disbursedAt  DateTime?
+  dueDate      DateTime?
+  createdAt    DateTime     @default(now())
+  transaction  Transaction? @relation(fields: [transactionId], references: [id])
+  transactionId String?
+  repayments   LoanRepayment[]
+}
+
+model LoanRepayment {
+  id       String   @id @default(uuid())
+  loan     Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  loanId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId   String?
+  amount   Decimal
+  paidAt   DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  entity    String
+  entityId  String?
+  action    String
+  payload   Json
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId    String?
+  createdAt DateTime @default(now())
+}
+
+model Transaction {
+  id          String          @id @default(uuid())
+  type        TransactionType
+  amount      Decimal
+  fromUser    User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId      String?
+  group       Group           @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId     String
+  referenceId String?
+  createdAt   DateTime        @default(now())
+}
